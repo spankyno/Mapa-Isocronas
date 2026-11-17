@@ -6,7 +6,7 @@ import SettingsModal from './components/SettingsModal'
 import { useIsochrones } from './hooks/useIsochrones'
 import { DEFAULT_MINUTES } from './lib/colors'
 import { BASE_SPEED, fetchQuota } from './lib/ors'
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react'
+import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './lib/settings'
 
 type LatLng = { lat: number; lng: number }
@@ -25,7 +25,7 @@ function Tool() {
   const { layers, loading, error, remaining, setRemaining, calculate, clear } = useIsochrones(getToken)
 
   useEffect(() => saveSettings(settings), [settings])
-  useEffect(() => { getToken().then(fetchQuota).then((r) => r && setRemaining(r)) }, [getToken, setRemaining])
+  useEffect(() => { getToken().then(fetchQuota).then((r) => r && setRemaining(r)).catch(() => {}) }, [getToken, setRemaining])
   useEffect(() => { if (loading) setDrawer(false) }, [loading])
 
   // Fijar origen (clic, arrastre o búsqueda) ⇒ actualiza el texto y calcula.
@@ -94,7 +94,7 @@ function Tool() {
 export default function App() {
   return (
     <>
-      <SignedOut>
+      <Show when="signed-out">
         <div className="flex h-full items-center justify-center bg-slate-50 p-6">
           <div className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow-xl">
             <h1 className="text-2xl font-bold tracking-tight">Mapa Isocronas</h1>
@@ -109,8 +109,8 @@ export default function App() {
             </div>
           </div>
         </div>
-      </SignedOut>
-      <SignedIn><Tool /></SignedIn>
+      </Show>
+      <Show when="signed-in"><Tool /></Show>
     </>
   )
 }

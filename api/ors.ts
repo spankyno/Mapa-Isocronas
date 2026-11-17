@@ -9,7 +9,12 @@ export default async function handler(req: any, res: any) {
   const secretKey = process.env.CLERK_SECRET_KEY
   const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '')
   let userId: string
-  try { userId = (await verifyToken(token, { secretKey })).sub } catch { return res.status(401).json({ error: 'unauthenticated' }) }
+  try {
+    const r: any = await verifyToken(token, { secretKey })
+    if (r?.errors?.length) throw r.errors[0]
+    userId = (r?.data ?? r).sub
+    if (!userId) throw new Error('no sub')
+  } catch { return res.status(401).json({ error: 'unauthenticated' }) }
 
   const clerk = createClerkClient({ secretKey })
   const user = await clerk.users.getUser(userId)
