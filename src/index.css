@@ -1,0 +1,10 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { @apply font-sans text-ink antialiased; }
+.leaflet-container { font-family: inherit; }
+.origin-pin { width: 22px; height: 22px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: #14213d; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
