@@ -3,6 +3,7 @@
 import { createClerkClient, verifyToken } from '@clerk/backend'
 
 const FREE_LIMIT = 3
+const PROFILES = ['driving-car', 'driving-hgv', 'cycling-regular', 'foot-walking']
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }) // día de España
 
 export default async function handler(req: any, res: any) {
@@ -33,7 +34,9 @@ export default async function handler(req: any, res: any) {
     b.range.length <= 7 && b.range.every((n: number) => Number.isFinite(n) && n > 0 && n <= 3600)
   if (!valid) return res.status(400).json({ error: 'bad_request' })
 
-  const r = await fetch('https://api.openrouteservice.org/v2/isochrones/driving-car', {
+  const profile = String(req.query?.profile ?? 'driving-car')
+  if (!PROFILES.includes(profile)) return res.status(400).json({ error: 'bad_profile' })
+  const r = await fetch(`https://api.openrouteservice.org/v2/isochrones/${profile}`, {
     method: 'POST',
     headers: { Authorization: process.env.ORS_API_KEY ?? '', 'Content-Type': 'application/json' },
     body: JSON.stringify({ locations: b.locations, range: b.range, range_type: 'time', attributes: ['area'], smoothing: 0.8 }),

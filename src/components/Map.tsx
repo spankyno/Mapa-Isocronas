@@ -39,14 +39,20 @@ function FitBounds({ layers }: { layers: IsoLayer[] }) {
   return null
 }
 
+/** Entrega la instancia de Leaflet a App (para calcular la escala al exportar). */
+function MapGrab({ leafletRef }: { leafletRef: React.MutableRefObject<L.Map | null> }) {
+  leafletRef.current = useMap()
+  return null
+}
+
 interface Props {
   origin: { lat: number; lng: number } | null
-  layers: IsoLayer[]; base: BaseLayerId; settings: Settings; picking: boolean
+  layers: IsoLayer[]; base: BaseLayerId; settings: Settings; picking: boolean; leafletRef: React.MutableRefObject<L.Map | null>
   onPick: (p: { lat: number; lng: number }) => void
 }
 
 // El ref apunta al contenedor que captura html2canvas.
-const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings: s, picking, onPick }, ref) => {
+const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings: s, picking, leafletRef, onPick }, ref) => {
   const b = BASE_LAYERS[base]
   const styleKey = JSON.stringify(s) // fuerza redibujar polígonos al cambiar ajustes
   return (
@@ -65,6 +71,7 @@ const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings:
         {origin && <Marker key={JSON.stringify(s.marker)} position={[origin.lat, origin.lng]} icon={makeIcon(s.marker)} draggable
           eventHandlers={{ dragend: (e) => { const ll = (e.target as L.Marker).getLatLng(); onPick({ lat: ll.lat, lng: ll.lng }) } }} />}
         <ClickHandler enabled={picking} onPick={onPick} />
+        <MapGrab leafletRef={leafletRef} />
         <FitBounds layers={layers} />
       </MapContainer>
     </div>

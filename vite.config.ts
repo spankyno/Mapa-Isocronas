@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
         '/api/ors': {
           target: 'https://api.openrouteservice.org',
           changeOrigin: true,
-          rewrite: () => '/v2/isochrones/driving-car',
+          rewrite: (p: string) => `/v2/isochrones/${new URL(p, 'http://x').searchParams.get('profile') ?? 'driving-car'}`,
           headers: { Authorization: env.ORS_API_KEY ?? '' },
         },
       },

@@ -4,6 +4,10 @@ export type IsoCollection = FeatureCollection<Polygon | MultiPolygon, { value: n
 
 // Proxy que oculta la API key (ver api/ors.ts o worker/ors-worker.js)
 const PROXY = import.meta.env.VITE_ORS_PROXY_URL ?? '/api/ors'
+export type Profile = 'driving-car' | 'driving-hgv' | 'cycling-regular' | 'foot-walking'
+export const PROFILES: Record<Profile, string> = {
+  'driving-car': 'Coche', 'driving-hgv': 'Camión', 'cycling-regular': 'Bici', 'foot-walking': 'A pie',
+}
 const MAX_SECONDS = 3600 // límite de la app (y del plan gratuito de ORS)
 export const BASE_SPEED = 80 // km/h de referencia
 
@@ -17,9 +21,9 @@ export function effectiveSeconds(minutes: number, speedKmh: number): number {
 }
 
 export async function fetchIsochrones(
-  origin: { lat: number; lng: number }, minutes: number[], speedKmh: number, token: string | null,
+  origin: { lat: number; lng: number }, minutes: number[], speedKmh: number, token: string | null, profile: Profile = 'driving-car',
 ): Promise<{ data: IsoCollection; remaining: string | null }> {
-  const res = await fetch(PROXY, {
+  const res = await fetch(`${PROXY}?profile=${profile}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
     body: JSON.stringify({

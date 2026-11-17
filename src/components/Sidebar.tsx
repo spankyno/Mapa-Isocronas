@@ -1,10 +1,12 @@
 import { AVAILABLE_MINUTES } from '../lib/colors'
+import { PROFILES, type Profile } from '../lib/ors'
 import { BASE_LAYERS, type BaseLayerId } from './Map'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 
 interface Props {
   query: string; setQuery: (s: string) => void
+  profile: Profile; setProfile: (p: Profile) => void
   onPickMode: () => void; onSettings: () => void
   minutes: number[]; setMinutes: (m: number[]) => void
   base: BaseLayerId; setBase: (b: BaseLayerId) => void
@@ -29,6 +31,17 @@ export default function Sidebar(p: Props) {
       <section className="space-y-2"><span className={label}>Origen</span>
         <SearchBox value={p.query} onChange={p.setQuery} onFound={p.onSearch} />
         <button onClick={p.onPickMode} className="w-full rounded-lg border border-route py-2 text-sm font-semibold text-route hover:bg-teal-50">Marcar en el mapa</button>
+      </section>
+
+      <section>
+        <span className={label}>Medio de transporte</span>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(Object.entries(PROFILES) as [Profile, string][]).map(([id, name]) => (
+            <label key={id} className={`cursor-pointer rounded-lg border px-1 py-2 text-center text-sm transition focus-within:ring-2 focus-within:ring-route/40 ${p.profile === id ? 'border-route bg-route text-white' : 'border-slate-300 bg-white hover:border-slate-400'}`}>
+              <input type="radio" name="profile" className="sr-only" checked={p.profile === id} onChange={() => p.setProfile(id)} />{name}
+            </label>
+          ))}
+        </div>
       </section>
 
       <section>
@@ -61,7 +74,7 @@ export default function Sidebar(p: Props) {
           {p.loading ? 'Calculando…' : 'Calcular'}
         </button>
         <button onClick={p.onClear} className="rounded-lg border border-slate-300 px-4 py-2.5 font-semibold hover:bg-slate-50">Limpiar</button>
-        <button onClick={p.onExport} className="col-span-2 rounded-lg bg-ink px-4 py-2.5 font-semibold text-white hover:bg-slate-800">Exportar mapa (PNG)</button>
+        <button onClick={p.onExport} className="col-span-2 rounded-lg bg-ink px-4 py-2.5 font-semibold text-white hover:bg-slate-800">Exportar…</button>
         <button onClick={p.onSettings} className="col-span-2 rounded-lg border border-slate-300 px-4 py-2.5 font-semibold hover:bg-slate-50">Configuración</button>
       </div>
     </div>
