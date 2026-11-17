@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
+        '/api/carto': {
+          target: 'https://basemaps.cartocdn.com', changeOrigin: true,
+          rewrite: (p: string) => { const q = new URL(p, 'http://x').searchParams
+            return `/rastertiles/light_all/${q.get('z')}/${q.get('x')}/${q.get('y')}.png?key=${env.CARTO_KEY ?? env.CATO_KEY}` },
+        },
         '/api/ors': {
           target: 'https://api.openrouteservice.org',
           changeOrigin: true,

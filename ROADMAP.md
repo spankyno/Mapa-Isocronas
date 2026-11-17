@@ -21,3 +21,7 @@
 - Cuentas de usuario, escenarios guardados y proyectos compartidos.
 - Informes PDF automáticos y API pública para integrar isócronas.
 - Pruebas automáticas (Vitest + Playwright) y CI en el despliegue.
+
+## Cuentas (siguiente)
+- Cobro del plan Pro con Clerk Billing/Stripe en lugar de metadata manual.
+- Cuota en Upstash/Vercel KV (atómica, sin depender de la API de Clerk) y panel de uso.

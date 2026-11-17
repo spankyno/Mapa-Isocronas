@@ -7,14 +7,13 @@ import type { Settings } from '../lib/settings'
 export type BaseLayerId = 'osm' | 'esri' | 'pnoa' | 'carto'
 type Base = { name: string; url: string; attribution: string; maxZoom: number }
 
-// CARTO exige ahora una API key gratuita (carto.com/basemaps/apikey). Solo se ofrece si defines VITE_CARTO_KEY.
-const CARTO_KEY = import.meta.env.VITE_CARTO_KEY as string | undefined
+// CARTO exige API key: se sirve a través de /api/carto (la clave queda en el servidor).
 
-export const BASE_LAYERS: Partial<Record<BaseLayerId, Base>> = {
+export const BASE_LAYERS: Record<BaseLayerId, Base> = {
   osm: { name: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap', maxZoom: 19 },
   esri: { name: 'Esri Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri, Maxar', maxZoom: 18 },
   pnoa: { name: 'PNOA (IGN)', url: 'https://www.ign.es/wmts/pnoa-ma?request=GetTile&service=WMTS&VERSION=1.0.0&Layer=OI.OrthoimageCoverage&Style=default&Format=image/jpeg&TileMatrixSet=GoogleMapsCompatible&TileMatrix={z}&TileCol={x}&TileRow={y}', attribution: '© IGN España', maxZoom: 19 },
-  ...(CARTO_KEY ? { carto: { name: 'CartoDB Positron', url: `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key=${CARTO_KEY}`, attribution: '© OpenStreetMap © CARTO', maxZoom: 20 } } : {}),
+  carto: { name: 'CartoDB Positron', url: '/api/carto?z={z}&x={x}&y={y}', attribution: '© OpenStreetMap © CARTO', maxZoom: 19 },
 }
 
 /** Icono del origen según los ajustes (forma, tamaño y colores). */
@@ -48,7 +47,7 @@ interface Props {
 
 // El ref apunta al contenedor que captura html2canvas.
 const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings: s, onPick }, ref) => {
-  const b = BASE_LAYERS[base] ?? BASE_LAYERS.osm!
+  const b = BASE_LAYERS[base]
   const styleKey = JSON.stringify(s) // fuerza redibujar polígonos al cambiar ajustes
   return (
     <div ref={ref} className="h-full w-full">

@@ -17,26 +17,32 @@ export function effectiveSeconds(minutes: number, speedKmh: number): number {
 }
 
 export async function fetchIsochrones(
-  origin: { lat: number; lng: number }, minutes: number[], speedKmh: number,
-): Promise<IsoCollection> {
+  origin: { lat: number; lng: number }, minutes: number[], speedKmh: number, token: string | null,
+): Promise<{ data: IsoCollection; remaining: string | null }> {
   const res = await fetch(PROXY, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
     body: JSON.stringify({
       locations: [[origin.lng, origin.lat]], // ORS usa [lon, lat]
       range: minutes.map((m) => effectiveSeconds(m, speedKmh)),
-      range_type: 'time',
-      attributes: ['area'],
-      smoothing: 0.8,
     }),
   })
-  if (res.status === 401 || res.status === 403)
-    throw new Error('API key inválida o sin permisos. Revisa ORS_API_KEY en el servidor.')
-  if (res.status === 429) throw new Error('Límite de peticiones de ORS alcanzado. Espera un momento.')
+  if (res.status === 401) throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.')
+  if (res.status === 429) throw new Error('Has alcanzado el límite de 3 mapas diarios. Hazte Pro para uso ilimitado o vuelve mañana.')
+  if (res.status === 502) throw new Error('API key de ORS inválida (configuración del servidor).')
+  if (res.status === 503) throw new Error('OpenRouteService está saturado. Espera un momento.')
   if (!res.ok) throw new Error(`Error del servicio de isócronas (${res.status}). Puede que el punto no esté cerca de una carretera.`)
   const data = (await res.json()) as IsoCollection
   if (!data.features?.length) throw new Error('No hay resultados para este punto. Prueba con otro origen.')
-  return data
+  return { data, remaining: res.headers.get('X-Remaining') }
+}
+
+/** Mapas restantes hoy ("unlimited" para Pro), sin consumir cuota. */
+export async function fetchQuota(token: string | null): Promise<string | null> {
+  try {
+    const r = await fetch(PROXY, { headers: { Authorization: `Bearer ${token ?? ''}` } })
+    return r.ok ? ((await r.json()) as { remaining: string }).remaining : null
+  } catch { return null }
 }
 
 /** Búsqueda simple con Nominatim, limitada a España. También acepta "lat, lon". */
