@@ -35,7 +35,14 @@ export async function fetchIsochrones(
   if (res.status === 429) throw new Error('Has alcanzado el límite de 3 mapas diarios. Hazte Pro para uso ilimitado o vuelve mañana.')
   if (res.status === 502) throw new Error('API key de ORS inválida (configuración del servidor).')
   if (res.status === 503) throw new Error('OpenRouteService está saturado. Espera un momento.')
-  if (!res.ok) throw new Error(`Error del servicio de isócronas (${res.status}). Puede que el punto no esté cerca de una carretera.`)
+  if (!res.ok) {
+    // El proxy devuelve { error, detail }: mostramos la causa real en lugar de suponerla
+    const j = (await res.json().catch(() => null)) as { detail?: string } | null
+    const d = j?.detail ? ` Detalle: ${j.detail}` : ''
+    throw new Error(res.status === 422
+      ? `OpenRouteService no pudo calcular esta zona (¿punto lejos de una carretera o no válido para este medio?).${d}`
+      : `Error del servidor (${res.status}).${d}`)
+  }
   const data = (await res.json()) as IsoCollection
   if (!data.features?.length) throw new Error('No hay resultados para este punto. Prueba con otro origen.')
   return { data, remaining: res.headers.get('X-Remaining') }
