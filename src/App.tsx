@@ -5,6 +5,8 @@ import Sidebar from './components/Sidebar'
 import SettingsModal from './components/SettingsModal'
 import { useIsochrones } from './hooks/useIsochrones'
 import { DEFAULT_MINUTES } from './lib/colors'
+import Landing from './components/Landing'
+import Privacy from './components/Privacy'
 import { BASE_SPEED, fetchQuota } from './lib/ors'
 import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './lib/settings'
@@ -19,22 +21,24 @@ function Tool() {
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [drawer, setDrawer] = useState(false)
-  const [hint, setHint] = useState(false)
+  const [picking, setPicking] = useState(false) // true solo tras pulsar "Marcar en el mapa"
   const mapRef = useRef<HTMLDivElement>(null)
   const { getToken } = useAuth()
   const { layers, loading, error, remaining, setRemaining, calculate, clear } = useIsochrones(getToken)
 
   useEffect(() => saveSettings(settings), [settings])
+  useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && setPicking(false); window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f) }, [])
   useEffect(() => { getToken().then(fetchQuota).then((r) => r && setRemaining(r)).catch(() => {}) }, [getToken, setRemaining])
   useEffect(() => { if (loading) setDrawer(false) }, [loading])
 
   // Fijar origen (clic, arrastre o búsqueda) ⇒ actualiza el texto y calcula.
   const pick = (p: LatLng, label?: string) => {
+    setPicking(false)
     setOrigin(p); setQuery(label ?? `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`)
     calculate(p, minutes, BASE_SPEED)
   }
-  const reset = () => { setOrigin(null); setQuery(''); clear() } // elimina origen y texto
-  const markOnMap = () => { setDrawer(false); setHint(true); setTimeout(() => setHint(false), 4000) }
+  const reset = () => { setPicking(false); setOrigin(null); setQuery(''); clear() } // elimina origen y texto
+  const markOnMap = () => { setDrawer(false); setPicking((v) => !v) }
 
   async function exportPng() {
     if (!mapRef.current) return
@@ -54,7 +58,7 @@ function Tool() {
     <div className="flex h-full">
       <aside className="hidden w-96 shrink-0 overflow-y-auto border-r border-slate-200 bg-white md:block">{sidebar}</aside>
       <main className="relative flex-1">
-        <Map ref={mapRef} origin={origin} layers={layers} base={base} settings={settings} onPick={pick} />
+        <Map ref={mapRef} origin={origin} layers={layers} base={base} settings={settings} picking={picking} onPick={pick} />
 
         {/* Cuenta y cuota diaria */}
         <div className="absolute right-4 top-4 z-[1000] flex items-center gap-2 rounded-full bg-white py-1.5 pl-3 pr-1.5 text-sm font-medium shadow-lg">
@@ -62,9 +66,9 @@ function Tool() {
           <UserButton />
         </div>
 
-        {(!origin || hint) && !loading && (
+        {picking && !loading && (
           <div className="pointer-events-none absolute inset-x-0 top-4 z-[1000] mx-auto w-fit rounded-full bg-white px-4 py-2 text-sm font-medium shadow-lg">
-            {origin ? 'Haz clic en el mapa para mover el origen' : 'Haz clic en el mapa para marcar el origen'}
+            {origin ? 'Haz clic en el mapa para mover el origen' : 'Haz clic en el mapa para marcar el origen'} (Esc para cancelar)
           </div>
         )}
         {loading && (
@@ -90,26 +94,18 @@ function Tool() {
   )
 }
 
-/** Solo usuarios registrados pueden usar la herramienta (el servidor lo vuelve a comprobar). */
+function useHash() {
+  const [h, setH] = useState(window.location.hash)
+  useEffect(() => { const f = () => setH(window.location.hash); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f) }, [])
+  return h
+}
+
+/** Landing para anónimos, herramienta para registrados (el servidor lo vuelve a comprobar). La política es pública. */
 export default function App() {
+  if (useHash() === '#privacidad') return <Privacy />
   return (
     <>
-      <Show when="signed-out">
-        <div className="flex h-full items-center justify-center bg-slate-50 p-6">
-          <div className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow-xl">
-            <h1 className="text-2xl font-bold tracking-tight">Mapa Isocronas</h1>
-            <p className="text-slate-600">Calcula hasta dónde llegas conduciendo en España. Inicia sesión o regístrate para usar la herramienta.</p>
-            <ul className="space-y-1 text-sm text-slate-700">
-              <li><strong>Registrado:</strong> hasta 3 mapas al día</li>
-              <li><strong>Pro:</strong> uso ilimitado</li>
-            </ul>
-            <div className="grid grid-cols-2 gap-2">
-              <SignInButton mode="modal"><button className="rounded-lg border border-slate-300 py-2.5 font-semibold hover:bg-slate-50">Iniciar sesión</button></SignInButton>
-              <SignUpButton mode="modal"><button className="rounded-lg bg-route py-2.5 font-semibold text-white hover:bg-teal-800">Registrarme</button></SignUpButton>
-            </div>
-          </div>
-        </div>
-      </Show>
+      <Show when="signed-out"><Landing /></Show>
       <Show when="signed-in"><Tool /></Show>
     </>
   )

@@ -28,8 +28,8 @@ function makeIcon(m: Settings['marker']) {
   return L.divIcon({ className: '', html: `<div style="${styles[m.shape]}"></div>`, iconSize: [s, s], iconAnchor: m.shape === 'pin' ? [s / 2, s] : [s / 2, s / 2] })
 }
 
-function ClickHandler({ onPick }: { onPick: (p: { lat: number; lng: number }) => void }) {
-  useMapEvents({ click: (e) => onPick({ lat: e.latlng.lat, lng: e.latlng.lng }) })
+function ClickHandler({ enabled, onPick }: { enabled: boolean; onPick: (p: { lat: number; lng: number }) => void }) {
+  useMapEvents({ click: (e) => enabled && onPick({ lat: e.latlng.lat, lng: e.latlng.lng }) })
   return null
 }
 
@@ -41,16 +41,16 @@ function FitBounds({ layers }: { layers: IsoLayer[] }) {
 
 interface Props {
   origin: { lat: number; lng: number } | null
-  layers: IsoLayer[]; base: BaseLayerId; settings: Settings
+  layers: IsoLayer[]; base: BaseLayerId; settings: Settings; picking: boolean
   onPick: (p: { lat: number; lng: number }) => void
 }
 
 // El ref apunta al contenedor que captura html2canvas.
-const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings: s, onPick }, ref) => {
+const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings: s, picking, onPick }, ref) => {
   const b = BASE_LAYERS[base]
   const styleKey = JSON.stringify(s) // fuerza redibujar polígonos al cambiar ajustes
   return (
-    <div ref={ref} className="h-full w-full">
+    <div ref={ref} className={`h-full w-full ${picking ? 'picking' : ''}`}>
       <MapContainer center={[40.4, -3.7]} zoom={6} minZoom={5} doubleClickZoom={false} className="h-full w-full">
         <TileLayer key={base} url={b.url} attribution={b.attribution} maxZoom={b.maxZoom} crossOrigin="anonymous" />
         {layers.map((l) => (
@@ -64,7 +64,7 @@ const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings:
         {/* Marcador arrastrable: al soltarlo se recalcula desde la nueva posición */}
         {origin && <Marker key={JSON.stringify(s.marker)} position={[origin.lat, origin.lng]} icon={makeIcon(s.marker)} draggable
           eventHandlers={{ dragend: (e) => { const ll = (e.target as L.Marker).getLatLng(); onPick({ lat: ll.lat, lng: ll.lng }) } }} />}
-        <ClickHandler onPick={onPick} />
+        <ClickHandler enabled={picking} onPick={onPick} />
         <FitBounds layers={layers} />
       </MapContainer>
     </div>

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mapaisocronas.vercel.app/sitemap.xml

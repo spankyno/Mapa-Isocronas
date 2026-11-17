@@ -15,7 +15,8 @@
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
     "@clerk/localizations": "latest",
-    "@clerk/react": "^6.9.1"
+    "@clerk/react": "^6.9.1",
+    "react-markdown": "^9.0.1"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.14",
