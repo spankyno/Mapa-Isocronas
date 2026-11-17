@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react()],
+    // Expone al cliente solo VITE_* y CLERK_PUBLISHABLE_* (nunca CLERK_SECRET_KEY ni ORS_API_KEY)
+    envPrefix: ['VITE_', 'CLERK_PUBLISHABLE_'],
     server: {
       proxy: {
         '/api/carto': {
