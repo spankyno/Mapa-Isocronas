@@ -64,8 +64,6 @@ export default function Sidebar(p: Props) {
         <button onClick={p.onExport} className="col-span-2 rounded-lg bg-ink px-4 py-2.5 font-semibold text-white hover:bg-slate-800">Exportar mapa (PNG)</button>
         <button onClick={p.onSettings} className="col-span-2 rounded-lg border border-slate-300 px-4 py-2.5 font-semibold hover:bg-slate-50">Configuración</button>
       </div>
-
-      <p className="text-xs text-slate-500"><a href="#privacidad" className="underline">Política de privacidad</a> · © 2026 Aitor Sánchez Gutiérrez</p>
     </div>
   )
 }

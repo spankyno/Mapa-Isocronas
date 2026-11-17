@@ -6,6 +6,7 @@ import SettingsModal from './components/SettingsModal'
 import { useIsochrones } from './hooks/useIsochrones'
 import { DEFAULT_MINUTES } from './lib/colors'
 import Landing from './components/Landing'
+import Footer from './components/Footer'
 import Privacy from './components/Privacy'
 import { BASE_SPEED, fetchQuota } from './lib/ors'
 import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
@@ -55,7 +56,8 @@ function Tool() {
   )
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col">
+      <div className="flex min-h-0 flex-1">
       <aside className="hidden w-96 shrink-0 overflow-y-auto border-r border-slate-200 bg-white md:block">{sidebar}</aside>
       <main className="relative flex-1">
         <Map ref={mapRef} origin={origin} layers={layers} base={base} settings={settings} picking={picking} onPick={pick} />
@@ -89,6 +91,8 @@ function Tool() {
           </div>
         )}
       </main>
+      </div>
+      <Footer />
       {settingsOpen && <SettingsModal s={settings} onChange={setSettings} onReset={() => setSettings(DEFAULT_SETTINGS)} onClose={() => setSettingsOpen(false)} />}
     </div>
   )
@@ -102,7 +106,10 @@ function useHash() {
 
 /** Landing para anónimos, herramienta para registrados (el servidor lo vuelve a comprobar). La política es pública. */
 export default function App() {
-  if (useHash() === '#privacidad') return <Privacy />
+  const hash = useHash()
+  const { isSignedIn } = useAuth()
+  if (hash === '#privacidad') return <Privacy />
+  if (hash === '#acerca') return <Landing signedIn={!!isSignedIn} /> // "Acerca de": visible para todos
   return (
     <>
       <Show when="signed-out"><Landing /></Show>

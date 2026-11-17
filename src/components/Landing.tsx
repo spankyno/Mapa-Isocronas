@@ -1,4 +1,5 @@
 import { SignInButton, SignUpButton } from '@clerk/react'
+import Footer from './Footer'
 
 const steps = [
   ['Marca el origen', 'Pulsa «Marcar en el mapa», haz clic en cualquier punto de España o busca una dirección.'],
@@ -15,22 +16,25 @@ const links = [
 
 const btn = 'rounded-lg px-5 py-3 font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2'
 
-export default function Landing() {
+export default function Landing({ signedIn = false }: { signedIn?: boolean }) {
   return (
     <div className="min-h-full bg-white text-ink">
       {/* Hero */}
       <header className="bg-[#0b1b2e] text-white">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <span className="font-display text-2xl">Mapa Isocronas</span>
-          <SignInButton mode="modal"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10">Iniciar sesión</button></SignInButton>
+          {signedIn
+            ? <a href="#" className="rounded-lg px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10">Abrir la herramienta</a>
+            : <SignInButton mode="modal"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10">Iniciar sesión</button></SignInButton>}
         </nav>
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 pb-20 pt-10 md:grid-cols-2 md:pb-28">
           <div>
             <h1 className="font-display text-5xl leading-[1.05] md:text-7xl">Hasta dónde llegas conduciendo</h1>
             <p className="mt-6 max-w-lg text-lg text-slate-300">Elige un punto en España y mira al instante las áreas que alcanzas en 5, 10, 15… hasta 60 minutos al volante.</p>
             <div className="mt-8 flex flex-wrap gap-3">
+              {signedIn ? <a href="#" className={`${btn} bg-white text-ink hover:bg-slate-100`}>Abrir la herramienta</a> : (<>
               <SignUpButton mode="modal"><button className={`${btn} bg-white text-ink hover:bg-slate-100 focus-visible:ring-white focus-visible:ring-offset-[#0b1b2e]`}>Crear cuenta gratis</button></SignUpButton>
-              <SignInButton mode="modal"><button className={`${btn} border border-white/30 text-white hover:bg-white/10 focus-visible:ring-white focus-visible:ring-offset-[#0b1b2e]`}>Iniciar sesión</button></SignInButton>
+              <SignInButton mode="modal"><button className={`${btn} border border-white/30 text-white hover:bg-white/10 focus-visible:ring-white focus-visible:ring-offset-[#0b1b2e]`}>Iniciar sesión</button></SignInButton></>)}
             </div>
           </div>
           {/* Se recorta og-image.png a su mitad derecha (isócronas) */}
@@ -94,10 +98,7 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="border-t border-slate-200 px-6 py-8 text-center text-sm text-slate-500">
-        <p>Autor: Aitor Sánchez Gutiérrez. © 2026 - Todos los derechos reservados.</p>
-        <p className="mt-2"><a href="#privacidad" className="underline hover:text-route">Política de privacidad</a></p>
-      </footer>
+      <Footer />
     </div>
   )
 }
