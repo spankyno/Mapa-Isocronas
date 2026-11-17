@@ -9,6 +9,25 @@ const PROFILES = ['driving-car', 'driving-hgv', 'cycling-regular', 'foot-walking
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }) // día de España
 const short = (s: unknown) => String(s ?? '').slice(0, 200)
 
+/** Llama a ORS con timeout y un reintento si hay 502/503/504 (el servicio público se satura a veces). */
+async function callOrs(profile: string, body: unknown) {
+  for (let i = 0; i < 2; i++) {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 25000)
+    try {
+      const r = await fetch(`https://api.openrouteservice.org/v2/isochrones/${profile}`, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { Authorization: process.env.ORS_API_KEY ?? '', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const text = await r.text()
+      if (![502, 503, 504].includes(r.status) || i === 1) return { r, text }
+    } catch (e) { if (i === 1) throw e } finally { clearTimeout(timer) }
+    await new Promise((ok) => setTimeout(ok, 1000))
+  }
+  throw new Error('unreachable')
+}
+
 export default async function handler(req: any, res: any) {
   try {
     const secretKey = process.env.CLERK_SECRET_KEY
@@ -41,18 +60,19 @@ export default async function handler(req: any, res: any) {
     const profile = String(req.query?.profile ?? 'driving-car')
     if (!PROFILES.includes(profile)) return res.status(400).json({ error: 'bad_profile' })
 
-    const r = await fetch(`https://api.openrouteservice.org/v2/isochrones/${profile}`, {
-      method: 'POST',
-      headers: { Authorization: process.env.ORS_API_KEY ?? '', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locations: b.locations, range: b.range, range_type: 'time', attributes: ['area'], smoothing: 0.8 }),
-    })
-    const text = await r.text()
+    let out: Awaited<ReturnType<typeof callOrs>>
+    try {
+      out = await callOrs(profile, { locations: b.locations, range: b.range, range_type: 'time', attributes: ['area'], smoothing: 0.8 })
+    } catch (e) { console.error('ORS timeout/red', e); return res.status(504).json({ error: 'ors_timeout' }) }
+    const { r, text } = out
     if (!r.ok) {
       console.error('ORS error', r.status, profile, text.slice(0, 500)) // visible en Vercel > Logs
+      if (r.status >= 502 && r.status <= 504) return res.status(504).json({ error: 'ors_timeout' }) // ORS saturado o lento
       if (r.status === 401 || r.status === 403) return res.status(502).json({ error: 'ors_key' })
       if (r.status === 429) return res.status(503).json({ error: 'ors_busy' })
       let detail = text
       try { const j = JSON.parse(text); detail = j?.error?.message ?? j?.error ?? text } catch { /* texto plano */ }
+      if (/^\s*</.test(text)) detail = 'respuesta no válida de ORS' // HTML (p. ej. de un proxy), no se muestra
       return res.status(422).json({ error: 'ors_error', status: r.status, detail: short(typeof detail === 'string' ? detail : JSON.stringify(detail)) })
     }
 
