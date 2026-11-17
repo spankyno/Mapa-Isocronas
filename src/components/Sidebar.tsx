@@ -4,11 +4,12 @@ import Legend from './Legend'
 import SearchBox from './SearchBox'
 
 interface Props {
-  speed: number; setSpeed: (n: number) => void
+  query: string; setQuery: (s: string) => void
+  onPickMode: () => void; onSettings: () => void
   minutes: number[]; setMinutes: (m: number[]) => void
   base: BaseLayerId; setBase: (b: BaseLayerId) => void
   loading: boolean; error: string | null; hasOrigin: boolean
-  onSearch: (p: { lat: number; lng: number }) => void
+  onSearch: (p: { lat: number; lng: number; label: string }) => void
   onCalculate: () => void; onClear: () => void; onExport: () => void
 }
 
@@ -25,13 +26,9 @@ export default function Sidebar(p: Props) {
         <p className="mt-1 text-sm text-slate-600">Haz clic en el mapa para ver hasta dónde llegas conduciendo.</p>
       </header>
 
-      <section><span className={label}>Buscar origen</span><SearchBox onFound={p.onSearch} /></section>
-
-      <section>
-        <label className={label} htmlFor="speed">Velocidad media: {p.speed} km/h</label>
-        <input id="speed" type="range" min={40} max={120} step={5} value={p.speed}
-          onChange={(e) => p.setSpeed(+e.target.value)} className="w-full accent-route" />
-        <p className="mt-1 text-xs text-slate-500">Escala el alcance respecto a 80 km/h. Máximo: 60 min.</p>
+      <section className="space-y-2"><span className={label}>Origen</span>
+        <SearchBox value={p.query} onChange={p.setQuery} onFound={p.onSearch} />
+        <button onClick={p.onPickMode} className="w-full rounded-lg border border-route py-2 text-sm font-semibold text-route hover:bg-teal-50">Marcar en el mapa</button>
       </section>
 
       <section>
@@ -65,6 +62,7 @@ export default function Sidebar(p: Props) {
         </button>
         <button onClick={p.onClear} className="rounded-lg border border-slate-300 px-4 py-2.5 font-semibold hover:bg-slate-50">Limpiar</button>
         <button onClick={p.onExport} className="col-span-2 rounded-lg bg-ink px-4 py-2.5 font-semibold text-white hover:bg-slate-800">Exportar mapa (PNG)</button>
+        <button onClick={p.onSettings} className="col-span-2 rounded-lg border border-slate-300 px-4 py-2.5 font-semibold hover:bg-slate-50">Configuración</button>
       </div>
     </div>
   )
