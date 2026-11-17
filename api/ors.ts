@@ -9,11 +9,15 @@ const PROFILES = ['driving-car', 'driving-hgv', 'cycling-regular', 'foot-walking
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }) // día de España
 const short = (s: unknown) => String(s ?? '').slice(0, 200)
 
-/** Llama a ORS con timeout y un reintento si hay 502/503/504 (el servicio público se satura a veces). */
+// Fallos transitorios de la pasarela de ORS: 502/503/504 o "There was a problem proxying the request".
+// Un 500 con código propio de ORS (p. ej. 3099) es determinista y no se reintenta.
+const transient = (status: number, text: string) => status >= 502 || /problem proxying/i.test(text)
+
+/** Llama a ORS con timeout y hasta 3 intentos ante fallos transitorios (el servicio público se satura a veces). */
 async function callOrs(profile: string, body: unknown) {
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 25000)
+    const timer = setTimeout(() => ctrl.abort(), 18000)
     try {
       const r = await fetch(`https://api.openrouteservice.org/v2/isochrones/${profile}`, {
         method: 'POST', signal: ctrl.signal,
@@ -21,9 +25,9 @@ async function callOrs(profile: string, body: unknown) {
         body: JSON.stringify(body),
       })
       const text = await r.text()
-      if (![502, 503, 504].includes(r.status) || i === 1) return { r, text }
-    } catch (e) { if (i === 1) throw e } finally { clearTimeout(timer) }
-    await new Promise((ok) => setTimeout(ok, 1000))
+      if (!transient(r.status, text) || i === 2) return { r, text }
+    } catch (e) { if (i === 2) throw e } finally { clearTimeout(timer) }
+    await new Promise((ok) => setTimeout(ok, 1500))
   }
   throw new Error('unreachable')
 }
@@ -67,7 +71,7 @@ export default async function handler(req: any, res: any) {
     const { r, text } = out
     if (!r.ok) {
       console.error('ORS error', r.status, profile, text.slice(0, 500)) // visible en Vercel > Logs
-      if (r.status >= 502 && r.status <= 504) return res.status(504).json({ error: 'ors_timeout' }) // ORS saturado o lento
+      if (transient(r.status, text)) return res.status(504).json({ error: 'ors_timeout' }) // ORS saturado o lento
       if (r.status === 401 || r.status === 403) return res.status(502).json({ error: 'ors_key' })
       if (r.status === 429) return res.status(503).json({ error: 'ors_busy' })
       let detail = text
