@@ -35,13 +35,13 @@ export async function fetchIsochrones(
   if (res.status === 429) throw new Error('Has alcanzado el límite de 3 mapas diarios. Hazte Pro para uso ilimitado o vuelve mañana.')
   if (res.status === 502) throw new Error('API key de ORS inválida (configuración del servidor).')
   if (res.status === 503) throw new Error('OpenRouteService está saturado. Espera un momento.')
-  if (res.status === 504) throw new Error('OpenRouteService tardó demasiado en responder. Inténtalo de nuevo o prueba con menos tiempos o un máximo menor (p. ej. 45 min).')
+  if (res.status === 504) throw new Error('OpenRouteService está saturado o inestable ahora mismo (el fallo es de su servicio, no de tu punto). Reinténtalo en unos minutos o prueba con menos tiempos o un máximo menor (p. ej. 30–45 min).')
   if (!res.ok) {
     // El proxy devuelve { error, detail }: mostramos la causa real en lugar de suponerla
-    const j = (await res.json().catch(() => null)) as { detail?: string } | null
+    const j = (await res.json().catch(() => null)) as { detail?: string; status?: number } | null
     const d = j?.detail ? ` Detalle: ${j.detail}` : ''
     throw new Error(res.status === 422
-      ? `OpenRouteService no pudo calcular esta zona (¿punto lejos de una carretera o no válido para este medio?).${d}`
+      ? `OpenRouteService no pudo calcular esta zona${j?.status === 404 ? ' (¿punto lejos de una carretera?)' : ''}.${d}`
       : `Error del servidor (${res.status}).${d}`)
   }
   const data = (await res.json()) as IsoCollection
