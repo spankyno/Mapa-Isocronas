@@ -2,7 +2,7 @@
 // Códigos: 401 sesión · 429 cuota diaria / demasiadas peticiones · 502 clave ORS inválida · 503 ORS saturado, capacidad o cuotas no configuradas
 //          422 ORS no pudo calcular · 504 ORS lento · 500 fallo del servidor.
 import { createClerkClient } from '@clerk/backend'
-import { bearer, hasRedis, redis, userIdFrom } from './_auth'
+import { bearer, hasRedis, redis, userIdFrom } from './_auth.js'
 
 const FREE_LIMIT = 3                                            // mapas/día, cuentas gratuitas
 const RATE_LIMIT = 6                                            // peticiones/minuto por usuario (también Pro)
@@ -97,6 +97,7 @@ export default async function handler(req: any, res: any) {
   } catch (e) {
     await undo()
     console.error('Fallo en /api/ors', e) // el detalle solo va a los logs, no al cliente
+    if (e instanceof Error && e.message === 'redis') return res.status(503).json({ error: 'quota_unavailable' }) // Redis mal configurado o caído
     return res.status(500).json({ error: 'server' })
   }
 }

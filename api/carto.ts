@@ -1,5 +1,5 @@
 // Proxy de teselas CARTO. La clave (CARTO_KEY, o CATO_KEY) nunca llega al navegador y solo sirve a usuarios con sesión.
-import { cookieTokens, userIdFrom } from './_auth'
+import { cookieTokens, userIdFrom } from './_auth.js'
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).send('method')
