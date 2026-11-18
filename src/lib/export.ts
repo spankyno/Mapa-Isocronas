@@ -1,9 +1,9 @@
 import html2canvas from 'html2canvas'
 import type { Map as LMap } from 'leaflet'
-import type { IsoLayer } from '../hooks/useIsochrones'
+import type { Shape, DrawMode } from './geometry'
 import type { Settings } from './settings'
 
-export interface ExportCtx { layers: IsoLayer[]; origin: { lat: number; lng: number } | null; profile: string; profileLabel: string; settings: Settings }
+export interface ExportCtx { shapes: Shape[]; mode: DrawMode; origin: { lat: number; lng: number } | null; profile: string; profileLabel: string; settings: Settings }
 export interface VisualOpts { title: string; legend: boolean; scale: boolean }
 
 export function download(name: string, data: string | Blob, mime = 'text/plain') {
@@ -14,8 +14,8 @@ export function download(name: string, data: string | Blob, mime = 'text/plain')
 }
 
 /** Leyenda: tiempos ordenados de menor a mayor con su color. */
-const legendItems = (c: ExportCtx) => [...c.layers].sort((a, b) => a.minutes - b.minutes).map((l) => ({ label: `hasta ${l.minutes} min`, color: c.settings.colors[l.minutes] }))
-const polysOf = (l: IsoLayer) => (l.feature.geometry.type === 'Polygon' ? [l.feature.geometry.coordinates] : l.feature.geometry.coordinates)
+const legendItems = (c: ExportCtx) => [...c.shapes].sort((a, b) => a.minutes - b.minutes).map((l) => ({ label: l.label, color: c.settings.colors[l.minutes] }))
+const polysOf = (l: Shape) => l.coordinates
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!)
 
 // ---------- GeoJSON (WGS84, EPSG:4326). Orden: de mayor a menor, como se pintan en un SIG ----------
@@ -23,8 +23,8 @@ export function toGeoJSON(c: ExportCtx) {
   return {
     type: 'FeatureCollection', name: 'isocronas',
     features: [
-      ...c.layers.map((l) => ({ type: 'Feature', geometry: l.feature.geometry,
-        properties: { minutos: l.minutes, perfil: c.profileLabel, color: c.settings.colors[l.minutes], area_m2: l.feature.properties.area ?? null } })),
+      ...c.shapes.map((l) => ({ type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: l.coordinates },
+        properties: { minutos: l.minutes, rango: l.label, trazado: c.mode === 'rings' ? 'arandelas' : 'poligonos', perfil: c.profileLabel, color: c.settings.colors[l.minutes], area_m2: c.mode === 'polygons' ? l.area ?? null : null } })),
       ...(c.origin ? [{ type: 'Feature', properties: { tipo: 'origen' }, geometry: { type: 'Point', coordinates: [c.origin.lng, c.origin.lat] } }] : []),
     ],
   }
@@ -38,10 +38,10 @@ const kmlPoly = (rings: number[][][]) => `<Polygon><outerBoundaryIs><LinearRing>
 
 export function toKML(c: ExportCtx) {
   const s = c.settings
-  const marks = c.layers.map((l) => {
+  const marks = c.shapes.map((l) => {
     const col = s.colors[l.minutes], line = s.borderSameAsFill ? col : s.borderColor
     const polys = polysOf(l).map(kmlPoly)
-    return `<Placemark><name>hasta ${l.minutes} min</name><description>${esc(c.profileLabel)}</description>
+    return `<Placemark><name>${l.label}</name><description>${esc(c.profileLabel)}</description>
 <Style><PolyStyle><color>${kmlColor(col, s.fillOpacity)}</color><fill>${s.fillEnabled ? 1 : 0}</fill><outline>${s.borderEnabled ? 1 : 0}</outline></PolyStyle>
 <LineStyle><color>${kmlColor(line, s.borderOpacity)}</color><width>${s.borderWeight}</width></LineStyle></Style>
 ${polys.length > 1 ? `<MultiGeometry>${polys.join('')}</MultiGeometry>` : polys[0]}</Placemark>`
@@ -55,15 +55,15 @@ export function toSVG(c: ExportCtx, o: Pick<VisualOpts, 'title' | 'legend'>) {
   const s = c.settings
   const P = (lng: number, lat: number) => [(lng * Math.PI) / 180, Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))]
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
-  c.layers.forEach((l) => polysOf(l).forEach((p) => p[0].forEach(([lng, lat]) => {
+  c.shapes.forEach((l) => polysOf(l).forEach((p) => p[0].forEach(([lng, lat]) => {
     const [x, y] = P(lng, lat); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y)
   })))
   const W = 1000, pad = 30, k = (W - 2 * pad) / (x1 - x0), top = pad + (o.title ? 50 : 0), H = Math.round(top + (y1 - y0) * k + pad)
   const xy = (lng: number, lat: number) => { const [x, y] = P(lng, lat); return [pad + (x - x0) * k, top + (y1 - y) * k] }
   const d = (rings: number[][][]) => rings.map((r) => 'M' + r.map(([lng, lat]) => xy(lng, lat).map((v) => v.toFixed(1)).join(',')).join('L') + 'Z').join('')
-  const paths = c.layers.map((l) => {
+  const paths = c.shapes.map((l) => {
     const col = s.colors[l.minutes]
-    return `<path d="${polysOf(l).map(d).join('')}" fill-rule="evenodd" fill="${s.fillEnabled ? col : 'none'}" fill-opacity="${s.fillOpacity}" stroke="${s.borderEnabled ? (s.borderSameAsFill ? col : s.borderColor) : 'none'}" stroke-width="${s.borderWeight}" stroke-opacity="${s.borderOpacity}"${s.borderDashed ? ' stroke-dasharray="8 6"' : ''}><title>hasta ${l.minutes} min</title></path>`
+    return `<path d="${polysOf(l).map(d).join('')}" fill-rule="evenodd" fill="${s.fillEnabled ? col : 'none'}" fill-opacity="${s.fillOpacity}" stroke="${s.borderEnabled ? (s.borderSameAsFill ? col : s.borderColor) : 'none'}" stroke-width="${s.borderWeight}" stroke-opacity="${s.borderOpacity}"${s.borderDashed ? ' stroke-dasharray="8 6"' : ''}><title>${l.label}</title></path>`
   }).join('\n')
   const org = c.origin ? (([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${s.marker.size / 3}" fill="${s.marker.color}" stroke="${s.marker.border}" stroke-width="3"/>`)(xy(c.origin.lng, c.origin.lat)) : ''
   const items = legendItems(c), lh = items.length * 22 + 16
@@ -75,14 +75,47 @@ export function toSVG(c: ExportCtx, o: Pick<VisualOpts, 'title' | 'legend'>) {
 <rect width="${W}" height="${H}" fill="#f8fafc"/>${title}\n${paths}\n${org}${legend}</svg>`
 }
 
+/** Marcador de origen equivalente al icono CSS (chincheta, círculo o anillo). */
+function drawMarker(g: CanvasRenderingContext2D, p: { x: number; y: number }, m: Settings['marker']) {
+  const r = m.size / 2
+  g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 6; g.shadowOffsetY = 2
+  g.fillStyle = m.color; g.strokeStyle = m.border; g.lineWidth = 3; g.beginPath()
+  if (m.shape === 'pin') {
+    const cy = p.y - r
+    g.moveTo(p.x, cy + r * Math.SQRT2); g.lineTo(p.x + r * Math.SQRT1_2, cy + r * Math.SQRT1_2)
+    g.arc(p.x, cy, r, Math.PI / 4, (3 * Math.PI) / 4, true); g.closePath(); g.fill(); g.stroke()
+  } else if (m.shape === 'circle') { g.arc(p.x, p.y, r, 0, 2 * Math.PI); g.fill(); g.stroke() }
+  else {
+    const w = Math.max(3, m.size / 6)
+    g.arc(p.x, p.y, r - w / 2, 0, 2 * Math.PI); g.shadowColor = 'transparent'
+    g.lineWidth = w + 4; g.strokeStyle = m.border; g.stroke(); g.lineWidth = w; g.strokeStyle = m.color; g.stroke()
+  }
+  g.restore()
+}
+
 // ---------- PNG: captura del mapa + título, leyenda y escala dibujados encima ----------
 export async function toPNG(el: HTMLElement, map: LMap | null, c: ExportCtx, o: VisualOpts): Promise<Blob> {
-  const shot = await html2canvas(el, { useCORS: true, backgroundColor: null, ignoreElements: (e) => e.classList.contains('leaflet-control-zoom') })
+  const shot = await html2canvas(el, { useCORS: true, backgroundColor: null, ignoreElements: (e) => ['leaflet-control-zoom', 'leaflet-overlay-pane', 'leaflet-marker-pane', 'leaflet-shadow-pane'].some((k) => e.classList.contains(k)) })
   const f = shot.width / el.clientWidth, W = el.clientWidth, H = el.clientHeight
   const g = shot.getContext('2d')!
   g.scale(f, f); g.textBaseline = 'top'
   const font = (w: number, px: number) => (g.font = `${w} ${px}px "Instrument Sans", system-ui, sans-serif`)
   const box = (x: number, y: number, w: number, h: number) => { g.fillStyle = 'rgba(255,255,255,.92)'; g.beginPath(); g.roundRect(x, y, w, h, 10); g.fill() }
+
+  // Polígonos y marcador: se proyectan con Leaflet y se dibujan sobre el canvas (relleno even-odd para los huecos de las arandelas)
+  if (map) {
+    const s = c.settings
+    const pt = ([lng, lat]: number[]) => map.latLngToContainerPoint([lat, lng])
+    for (const sh of c.shapes) {
+      g.beginPath()
+      sh.coordinates.forEach((poly) => poly.forEach((r) => { r.forEach((p, i) => { const q = pt(p); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y) }); g.closePath() }))
+      const col = s.colors[sh.minutes]
+      if (s.fillEnabled) { g.globalAlpha = s.fillOpacity; g.fillStyle = col; g.fill('evenodd') }
+      if (s.borderEnabled) { g.globalAlpha = s.borderOpacity; g.strokeStyle = s.borderSameAsFill ? col : s.borderColor; g.lineWidth = s.borderWeight; g.setLineDash(s.borderDashed ? [8, 6] : []); g.stroke() }
+    }
+    g.globalAlpha = 1; g.setLineDash([])
+    if (c.origin) drawMarker(g, pt([c.origin.lng, c.origin.lat]), s.marker)
+  }
 
   if (o.title) { font(700, 20); const w = g.measureText(o.title).width; box(16, 16, w + 28, 42); g.fillStyle = '#14213d'; g.fillText(o.title, 30, 27) }
 

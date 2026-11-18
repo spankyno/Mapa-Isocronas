@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import type { Map as LMap } from 'leaflet'
-import type { IsoLayer } from '../hooks/useIsochrones'
+import type { Shape, DrawMode } from '../lib/geometry'
 import { PROFILES, type Profile } from '../lib/ors'
 import type { Settings } from '../lib/settings'
 import { download, toGeoJSON, toKML, toPNG, toSVG, type ExportCtx } from '../lib/export'
 
 interface Props {
-  layers: IsoLayer[]; origin: { lat: number; lng: number } | null; profile: Profile; settings: Settings
+  shapes: Shape[]; mode: DrawMode; origin: { lat: number; lng: number } | null; profile: Profile; settings: Settings
   mapEl: HTMLDivElement | null; map: LMap | null; onClose: () => void
 }
 
-export default function ExportModal({ layers, origin, profile, settings, mapEl, map, onClose }: Props) {
+export default function ExportModal({ shapes, mode, origin, profile, settings, mapEl, map, onClose }: Props) {
   const [title, setTitle] = useState(`Isócronas · ${PROFILES[profile]}`)
   const [showTitle, setShowTitle] = useState(true)
   const [legend, setLegend] = useState(true)
@@ -18,9 +18,9 @@ export default function ExportModal({ layers, origin, profile, settings, mapEl, 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const ctx: ExportCtx = { layers, origin, profile, profileLabel: PROFILES[profile], settings }
-  const name = `mapa-isocronas-${profile}`
-  const has = layers.length > 0
+  const ctx: ExportCtx = { shapes, mode, origin, profile, profileLabel: PROFILES[profile], settings }
+  const name = `mapa-isocronas-${profile}${mode === 'rings' ? '-arandelas' : ''}`
+  const has = shapes.length > 0
   const t = showTitle ? title.trim() : ''
 
   async function run(kind: 'png' | 'geojson' | 'kml' | 'svg') {

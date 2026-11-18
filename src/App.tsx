@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Map, { type BaseLayerId } from './components/Map'
 import Sidebar from './components/Sidebar'
 import SettingsModal from './components/SettingsModal'
@@ -9,6 +9,7 @@ import Footer from './components/Footer'
 import Privacy from './components/Privacy'
 import { BASE_SPEED, fetchQuota, type Profile } from './lib/ors'
 import ExportModal from './components/ExportModal'
+import { buildShapes, type DrawMode } from './lib/geometry'
 import type { Map as LMap } from 'leaflet'
 import { Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './lib/settings'
@@ -24,12 +25,14 @@ function Tool() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [profile, setProfile] = useState<Profile>('driving-car') // coche por defecto
+  const [mode, setMode] = useState<DrawMode>('polygons') // trazado: polígonos superpuestos o arandelas
   const [exportOpen, setExportOpen] = useState(false)
   const leafletRef = useRef<LMap | null>(null)
   const [picking, setPicking] = useState(false) // true solo tras pulsar "Marcar en el mapa"
   const mapRef = useRef<HTMLDivElement>(null)
   const { getToken } = useAuth()
   const { layers, loading, error, remaining, resultProfile, setRemaining, calculate, clear } = useIsochrones(getToken)
+  const shapes = useMemo(() => buildShapes(layers, mode), [layers, mode])
 
   useEffect(() => saveSettings(settings), [settings])
   useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && setPicking(false); window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f) }, [])
@@ -47,7 +50,7 @@ function Tool() {
 
 
   const sidebar = (
-    <Sidebar query={query} setQuery={setQuery} profile={profile} setProfile={setProfile} minutes={minutes} setMinutes={setMinutes} base={base} setBase={setBase}
+    <Sidebar query={query} setQuery={setQuery} profile={profile} setProfile={setProfile} mode={mode} setMode={setMode} minutes={minutes} setMinutes={setMinutes} base={base} setBase={setBase}
       loading={loading} error={error} hasOrigin={!!origin} onSearch={(p) => pick(p, p.label)} onPickMode={markOnMap}
       onCalculate={() => origin && calculate(origin, minutes, BASE_SPEED, profile)} onClear={reset} onExport={() => { setDrawer(false); setExportOpen(true) }}
       onSettings={() => { setDrawer(false); setSettingsOpen(true) }} />
@@ -58,7 +61,7 @@ function Tool() {
       <div className="flex min-h-0 flex-1">
       <aside className="hidden w-96 shrink-0 overflow-y-auto border-r border-slate-200 bg-white md:block">{sidebar}</aside>
       <main className="relative flex-1">
-        <Map ref={mapRef} origin={origin} layers={layers} base={base} settings={settings} picking={picking} leafletRef={leafletRef} onPick={pick} />
+        <Map ref={mapRef} origin={origin} layers={layers} shapes={shapes} mode={mode} base={base} settings={settings} picking={picking} leafletRef={leafletRef} onPick={pick} />
 
         {/* Cuenta y cuota diaria */}
         <div className="absolute right-4 top-4 z-[1000] flex items-center gap-2 rounded-full bg-white py-1.5 pl-3 pr-1.5 text-sm font-medium shadow-lg">
@@ -91,7 +94,7 @@ function Tool() {
       </main>
       </div>
       <Footer />
-      {exportOpen && <ExportModal layers={layers} origin={origin} profile={resultProfile} settings={settings} mapEl={mapRef.current} map={leafletRef.current} onClose={() => setExportOpen(false)} />}
+      {exportOpen && <ExportModal shapes={shapes} mode={mode} origin={origin} profile={resultProfile} settings={settings} mapEl={mapRef.current} map={leafletRef.current} onClose={() => setExportOpen(false)} />}
       {settingsOpen && <SettingsModal s={settings} onChange={setSettings} onReset={() => setSettings(DEFAULT_SETTINGS)} onClose={() => setSettingsOpen(false)} />}
     </div>
   )

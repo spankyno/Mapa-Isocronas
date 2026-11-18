@@ -1,5 +1,6 @@
 import { AVAILABLE_MINUTES } from '../lib/colors'
 import { PROFILES, type Profile } from '../lib/ors'
+import type { DrawMode } from '../lib/geometry'
 import { BASE_LAYERS, type BaseLayerId } from './Map'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
@@ -7,6 +8,7 @@ import SearchBox from './SearchBox'
 interface Props {
   query: string; setQuery: (s: string) => void
   profile: Profile; setProfile: (p: Profile) => void
+  mode: DrawMode; setMode: (m: DrawMode) => void
   onPickMode: () => void; onSettings: () => void
   minutes: number[]; setMinutes: (m: number[]) => void
   base: BaseLayerId; setBase: (b: BaseLayerId) => void
@@ -64,7 +66,19 @@ export default function Sidebar(p: Props) {
         </select>
       </section>
 
-      <section><span className={label}>Leyenda</span><Legend minutes={p.minutes} /></section>
+      <section>
+        <span className={label}>Trazado</span>
+        <div className="grid grid-cols-2 gap-1.5">
+          {([['polygons', 'Polígonos'], ['rings', 'Arandelas']] as [DrawMode, string][]).map(([id, name]) => (
+            <label key={id} className={`cursor-pointer rounded-lg border px-2 py-2 text-center text-sm transition focus-within:ring-2 focus-within:ring-route/40 ${p.mode === id ? 'border-route bg-route text-white' : 'border-slate-300 bg-white hover:border-slate-400'}`}>
+              <input type="radio" name="mode" className="sr-only" checked={p.mode === id} onChange={() => p.setMode(id)} />{name}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-500">{p.mode === 'rings' ? 'Cada franja empieza donde termina la anterior.' : 'Cada isócrona cubre toda el área desde el origen.'}</p>
+      </section>
+
+      <section><span className={label}>Leyenda</span><Legend minutes={p.minutes} mode={p.mode} /></section>
 
       {p.error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{p.error}</div>}
 

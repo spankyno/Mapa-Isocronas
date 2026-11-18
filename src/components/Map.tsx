@@ -2,6 +2,7 @@ import { forwardRef, useEffect } from 'react'
 import { MapContainer, TileLayer, GeoJSON, Marker, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import type { IsoLayer } from '../hooks/useIsochrones'
+import type { Shape, DrawMode } from '../lib/geometry'
 import type { Settings } from '../lib/settings'
 
 export type BaseLayerId = 'osm' | 'esri' | 'pnoa' | 'carto'
@@ -47,24 +48,25 @@ function MapGrab({ leafletRef }: { leafletRef: React.MutableRefObject<L.Map | nu
 
 interface Props {
   origin: { lat: number; lng: number } | null
-  layers: IsoLayer[]; base: BaseLayerId; settings: Settings; picking: boolean; leafletRef: React.MutableRefObject<L.Map | null>
+  layers: IsoLayer[]; shapes: Shape[]; mode: DrawMode; base: BaseLayerId; settings: Settings; picking: boolean; leafletRef: React.MutableRefObject<L.Map | null>
   onPick: (p: { lat: number; lng: number }) => void
 }
 
 // El ref apunta al contenedor que captura html2canvas.
-const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, base, settings: s, picking, leafletRef, onPick }, ref) => {
+const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, shapes, mode, base, settings: s, picking, leafletRef, onPick }, ref) => {
   const b = BASE_LAYERS[base]
-  const styleKey = JSON.stringify(s) // fuerza redibujar polígonos al cambiar ajustes
+  const styleKey = JSON.stringify([s, mode]) // fuerza redibujar polígonos al cambiar ajustes
   return (
     <div ref={ref} className={`h-full w-full ${picking ? 'picking' : ''}`}>
       <MapContainer center={[40.4, -3.7]} zoom={6} minZoom={5} doubleClickZoom={false} className="h-full w-full">
         <TileLayer key={base} url={b.url} attribution={b.attribution} maxZoom={b.maxZoom} crossOrigin="anonymous" />
-        {layers.map((l) => (
-          <GeoJSON key={`${origin?.lat}-${origin?.lng}-${l.minutes}-${styleKey}`} data={l.feature}
+        {shapes.map((sh) => (
+          <GeoJSON key={`${sh.minutes}-${sh.coordinates[0]?.[0]?.[0]?.join(',')}-${styleKey}`}
+            data={{ type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: sh.coordinates } }}
             style={{
-              fill: s.fillEnabled, fillColor: s.colors[l.minutes], fillOpacity: s.fillOpacity,
+              fill: s.fillEnabled, fillColor: s.colors[sh.minutes], fillOpacity: s.fillOpacity,
               stroke: s.borderEnabled, weight: s.borderWeight, opacity: s.borderOpacity,
-              color: s.borderSameAsFill ? s.colors[l.minutes] : s.borderColor, dashArray: s.borderDashed ? '8 6' : undefined,
+              color: s.borderSameAsFill ? s.colors[sh.minutes] : s.borderColor, dashArray: s.borderDashed ? '8 6' : undefined,
             }} />
         ))}
         {/* Marcador arrastrable: al soltarlo se recalcula desde la nueva posición */}

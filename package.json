@@ -16,7 +16,8 @@
     "react-leaflet": "^4.2.1",
     "@clerk/localizations": "latest",
     "@clerk/react": "^6.9.1",
-    "react-markdown": "^9.0.1"
+    "react-markdown": "^9.0.1",
+    "polygon-clipping": "^0.15.7"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.14",
