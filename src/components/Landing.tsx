@@ -27,19 +27,19 @@ export default function Landing({ signedIn = false }: { signedIn?: boolean }) {
             ? <a href="#" className="rounded-lg px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10">Abrir la herramienta</a>
             : <SignInButton mode="modal"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10">Iniciar sesión</button></SignInButton>}
         </nav>
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 pb-20 pt-10 md:grid-cols-2 md:pb-28">
-          <div>
+        <div className="mx-auto max-w-6xl px-6 pb-20 pt-10 md:pb-28">
+          <div className="mx-auto max-w-3xl text-center">
             <h1 className="font-display text-5xl leading-[1.05] md:text-7xl">Hasta dónde llegas conduciendo</h1>
-            <p className="mt-6 max-w-lg text-lg text-slate-300">Elige un punto en España y mira al instante las áreas que alcanzas en 5, 10, 15… hasta 60 minutos al volante.</p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <p className="mx-auto mt-6 max-w-lg text-lg text-slate-300">Elige un punto en España y mira al instante las áreas que alcanzas en 5, 10, 15… hasta 60 minutos al volante.</p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               {signedIn ? <a href="#" className={`${btn} bg-white text-ink hover:bg-slate-100`}>Abrir la herramienta</a> : (<>
               <SignUpButton mode="modal"><button className={`${btn} bg-white text-ink hover:bg-slate-100 focus-visible:ring-white focus-visible:ring-offset-[#0b1b2e]`}>Crear cuenta gratis</button></SignUpButton>
               <SignInButton mode="modal"><button className={`${btn} border border-white/30 text-white hover:bg-white/10 focus-visible:ring-white focus-visible:ring-offset-[#0b1b2e]`}>Iniciar sesión</button></SignInButton></>)}
             </div>
           </div>
-          {/* Se recorta og-image.png a su mitad derecha (isócronas) */}
-          <img src="/og-image.png" alt="Isócronas de conducción de 5 a 60 minutos desde un punto de origen"
-            className="aspect-square w-full rounded-3xl object-cover object-right shadow-2xl ring-1 ring-white/10" />
+          {/* og-image.png (1200×630) completa: sin recortes, centrada, escala por ancho conservando la proporción */}
+          <img src="/og-image.png" width={1200} height={630} alt="Mapa de isócronas de conducción alrededor de Vitoria-Gasteiz, con el título Mapa Isocronas"
+            className="mx-auto mt-14 h-auto w-full max-w-4xl rounded-3xl shadow-2xl ring-1 ring-white/10" />
         </div>
       </header>
 
