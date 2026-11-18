@@ -1,0 +1,19 @@
+# Dependencias y builds
+node_modules
+dist
+*.tsbuildinfo
+
+# Secretos: NUNCA subir claves (usa .env.example como plantilla)
+.env
+.env.*
+!.env.example
+
+# Vercel / editores / sistema
+.vercel
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
