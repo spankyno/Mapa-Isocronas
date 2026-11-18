@@ -2,6 +2,7 @@ import { forwardRef, useEffect } from 'react'
 import { MapContainer, TileLayer, GeoJSON, Marker, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import type { IsoLayer } from '../hooks/useIsochrones'
+import type { Feature, MultiPolygon } from 'geojson'
 import type { Shape, DrawMode } from '../lib/geometry'
 import type { Settings } from '../lib/settings'
 
@@ -40,6 +41,8 @@ function FitBounds({ layers }: { layers: IsoLayer[] }) {
   return null
 }
 
+const asFeature = (sh: Shape): Feature<MultiPolygon> => ({ type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: sh.coordinates } })
+
 /** Entrega la instancia de Leaflet a App (para calcular la escala al exportar). */
 function MapGrab({ leafletRef }: { leafletRef: React.MutableRefObject<L.Map | null> }) {
   leafletRef.current = useMap()
@@ -62,7 +65,7 @@ const Map = forwardRef<HTMLDivElement, Props>(({ origin, layers, shapes, mode, b
         <TileLayer key={base} url={b.url} attribution={b.attribution} maxZoom={b.maxZoom} crossOrigin="anonymous" />
         {shapes.map((sh) => (
           <GeoJSON key={`${sh.minutes}-${sh.coordinates[0]?.[0]?.[0]?.join(',')}-${styleKey}`}
-            data={{ type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: sh.coordinates } }}
+            data={asFeature(sh)}
             style={{
               fill: s.fillEnabled, fillColor: s.colors[sh.minutes], fillOpacity: s.fillOpacity,
               stroke: s.borderEnabled, weight: s.borderWeight, opacity: s.borderOpacity,
