@@ -9,17 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "html2canvas": "^1.4.1",
+    "@clerk/localizations": "latest",
+    "@clerk/react": "^6.9.1",
     "leaflet": "^1.9.4",
+    "polygon-clipping": "^0.15.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
-    "@clerk/localizations": "latest",
-    "@clerk/react": "^6.9.1",
-    "react-markdown": "^9.0.1",
-    "polygon-clipping": "^0.15.7"
+    "react-markdown": "^9.0.1"
   },
   "devDependencies": {
+    "@clerk/backend": "^3.7.0",
     "@types/geojson": "^7946.0.14",
     "@types/leaflet": "^1.9.12",
     "@types/node": "^20.14.0",
@@ -30,7 +30,6 @@
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.3",
-    "vite": "^5.3.1",
-    "@clerk/backend": "^3.7.0"
+    "vite": "^5.3.1"
   }
 }

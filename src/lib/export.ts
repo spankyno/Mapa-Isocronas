@@ -1,4 +1,3 @@
-import html2canvas from 'html2canvas'
 import type { Map as LMap } from 'leaflet'
 import type { Shape, DrawMode } from './geometry'
 import type { Settings } from './settings'
@@ -95,10 +94,19 @@ function drawMarker(g: CanvasRenderingContext2D, p: { x: number; y: number }, m:
 
 // ---------- PNG: captura del mapa + título, leyenda y escala dibujados encima ----------
 export async function toPNG(el: HTMLElement, map: LMap | null, c: ExportCtx, o: VisualOpts): Promise<Blob> {
-  const shot = await html2canvas(el, { useCORS: true, backgroundColor: null, ignoreElements: (e) => ['leaflet-control-zoom', 'leaflet-overlay-pane', 'leaflet-marker-pane', 'leaflet-shadow-pane'].some((k) => e.classList.contains(k)) })
-  const f = shot.width / el.clientWidth, W = el.clientWidth, H = el.clientHeight
-  const g = shot.getContext('2d')!
-  g.scale(f, f); g.textBaseline = 'top'
+  // Ya no se usa html2canvas: las teselas se copian con su posición real en pantalla y el resto se dibuja con la proyección de Leaflet,
+  // así teselas, polígonos y marcador quedan siempre alineados con el encuadre actual.
+  const W = el.clientWidth, H = el.clientHeight, f = Math.max(2, window.devicePixelRatio || 1)
+  const cv = document.createElement('canvas'); cv.width = W * f; cv.height = H * f
+  const g = cv.getContext('2d')!
+  g.scale(f, f); g.textBaseline = 'top'; g.fillStyle = '#e5e7eb'; g.fillRect(0, 0, W, H)
+  const cr = el.getBoundingClientRect()
+  const levels = Array.from(el.querySelectorAll<HTMLElement>('.leaflet-tile-container')).sort((a, b) => (+a.style.zIndex || 0) - (+b.style.zIndex || 0))
+  for (const lv of levels) for (const img of Array.from(lv.querySelectorAll<HTMLImageElement>('img.leaflet-tile'))) {
+    if (!img.complete || !img.naturalWidth) continue
+    const r = img.getBoundingClientRect()
+    g.drawImage(img, r.left - cr.left, r.top - cr.top, r.width + 0.5, r.height + 0.5) // +0.5 evita líneas finas entre teselas
+  }
   const font = (w: number, px: number) => (g.font = `${w} ${px}px "Instrument Sans", system-ui, sans-serif`)
   const box = (x: number, y: number, w: number, h: number) => { g.fillStyle = 'rgba(255,255,255,.92)'; g.beginPath(); g.roundRect(x, y, w, h, 10); g.fill() }
 
@@ -136,5 +144,7 @@ export async function toPNG(el: HTMLElement, map: LMap | null, c: ExportCtx, o: 
     g.beginPath(); g.moveTo(x, y - 4); g.lineTo(x, y + 8); g.lineTo(x + px, y + 8); g.lineTo(x + px, y - 4); g.stroke()
     font(600, 12); g.fillStyle = '#14213d'; g.fillText(label, x, y - 20)
   }
-  return new Promise((res, rej) => shot.toBlob((b) => (b ? res(b) : rej(new Error('No se pudo generar la imagen'))), 'image/png'))
+  const attr = el.querySelector('.leaflet-control-attribution')?.textContent?.replace(/\s+/g, ' ').trim()
+  if (attr) { font(400, 11); const w = g.measureText(attr).width + 12; g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(W - w, H - 18, w, 18); g.fillStyle = '#334155'; g.fillText(attr, W - w + 6, H - 14) }
+  return new Promise((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error('No se pudo generar la imagen'))), 'image/png'))
 }
