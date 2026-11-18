@@ -1,19 +1,19 @@
-// Vercel Function: valida sesión de Clerk, aplica cuota diaria y reenvía a ORS.
-// Cuota en Clerk (privateMetadata.usage). Plan Pro: publicMetadata.plan === "pro".
-// Códigos: 401 sesión · 429 cuota diaria · 502 clave ORS inválida · 503 ORS saturado ·
-//          422 ORS no pudo calcular (con detalle) · 500 fallo del servidor (con detalle).
-import { createClerkClient, verifyToken } from '@clerk/backend'
+// Vercel Function: sesión Clerk → límites (atómicos, en Redis) → ORS.
+// Códigos: 401 sesión · 429 cuota diaria / demasiadas peticiones · 502 clave ORS inválida · 503 ORS saturado, capacidad o cuotas no configuradas
+//          422 ORS no pudo calcular · 504 ORS lento · 500 fallo del servidor.
+import { createClerkClient } from '@clerk/backend'
+import { bearer, hasRedis, redis, userIdFrom } from './_auth'
 
-const FREE_LIMIT = 3
+const FREE_LIMIT = 3                                            // mapas/día, cuentas gratuitas
+const RATE_LIMIT = 6                                            // peticiones/minuto por usuario (también Pro)
+const GLOBAL_LIMIT = Number(process.env.GLOBAL_DAILY_LIMIT ?? 400) // tope diario de la clave ORS para cuentas gratuitas
 const PROFILES = ['driving-car', 'driving-hgv', 'cycling-regular', 'foot-walking']
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }) // día de España
 const short = (s: unknown) => String(s ?? '').slice(0, 200)
 
-// Fallos transitorios de la pasarela de ORS: 502/503/504 o "There was a problem proxying the request".
-// Un 500 con código propio de ORS (p. ej. 3099) es determinista y no se reintenta.
+// Fallos transitorios de la pasarela de ORS. Un 500 con código propio de ORS (p. ej. 3099) es determinista y no se reintenta.
 const transient = (status: number, text: string) => status >= 502 || /problem proxying/i.test(text)
 
-/** Llama a ORS con timeout y hasta 3 intentos ante fallos transitorios (el servicio público se satura a veces). */
 async function callOrs(profile: string, body: unknown) {
   for (let i = 0; i < 3; i++) {
     const ctrl = new AbortController()
@@ -33,63 +33,70 @@ async function callOrs(profile: string, body: unknown) {
 }
 
 export default async function handler(req: any, res: any) {
+  res.setHeader('Cache-Control', 'no-store')
+  let undo = async () => {} // devuelve la cuota reservada si el cálculo no llega a buen puerto
   try {
-    const secretKey = process.env.CLERK_SECRET_KEY
-    const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '')
-    let userId: string
-    try {
-      const r: any = await verifyToken(token, { secretKey })
-      if (r?.errors?.length) throw r.errors[0]
-      userId = (r?.data ?? r).sub
-      if (!userId) throw new Error('no sub')
-    } catch { return res.status(401).json({ error: 'unauthenticated' }) }
+    if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'method' })
+    const userId = await userIdFrom(bearer(req))
+    if (!userId) return res.status(401).json({ error: 'unauthenticated' })
 
-    const clerk = createClerkClient({ secretKey })
-    const user = await clerk.users.getUser(userId)
-    const pro = user.publicMetadata?.plan === 'pro'
-    const usage = user.privateMetadata?.usage as { date: string; count: number } | undefined
-    const used = usage?.date === today() ? usage.count : 0
-    const left = (n: number) => (pro ? 'unlimited' : String(Math.max(0, FREE_LIMIT - n)))
+    const pro = (await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(userId)).publicMetadata?.plan === 'pro'
+    if (!pro && !hasRedis) return res.status(503).json({ error: 'quota_unavailable' }) // sin contador atómico no se sirven cuentas gratuitas
 
-    if (req.method === 'GET') return res.status(200).json({ remaining: left(used) }) // consulta sin consumir
-    if (req.method !== 'POST') return res.status(405).json({ error: 'method' })
-    if (!pro && used >= FREE_LIMIT) { res.setHeader('X-Remaining', '0'); return res.status(429).json({ error: 'daily_limit' }) }
+    const day = today(), qK = `q:${userId}:${day}`, gK = `g:${day}`, rK = `rl:${userId}:${Math.floor(Date.now() / 60000)}`
 
-    // Validamos y reenviamos solo campos permitidos (evita usos arbitrarios de la API)
-    const b = req.body
-    const valid = Array.isArray(b?.locations) && b.locations.length === 1 && Array.isArray(b?.range) && b.range.length >= 1 &&
-      b.range.length <= 7 && b.range.every((n: number) => Number.isFinite(n) && n > 0 && n <= 3600)
+    if (req.method === 'GET') { // consulta sin consumir
+      if (pro) return res.status(200).json({ remaining: 'unlimited' })
+      const [n] = await redis([['GET', qK]])
+      return res.status(200).json({ remaining: String(Math.max(0, FREE_LIMIT - Number(n ?? 0))) })
+    }
+
+    // 1) Validar entrada ANTES de reservar cuota. Solo se reenvían campos permitidos, con coordenadas dentro de España.
+    const b = req.body, loc = b?.locations?.[0]
+    const valid = Array.isArray(b?.locations) && b.locations.length === 1 && Array.isArray(loc) && loc.length === 2 &&
+      loc.every((v: unknown) => typeof v === 'number' && Number.isFinite(v)) && loc[0] >= -19 && loc[0] <= 5 && loc[1] >= 27 && loc[1] <= 44 &&
+      Array.isArray(b?.range) && b.range.length >= 1 && b.range.length <= 7 &&
+      b.range.every((n: unknown) => Number.isInteger(n) && (n as number) > 0 && (n as number) <= 3600)
     if (!valid) return res.status(400).json({ error: 'bad_request' })
-
     const profile = String(req.query?.profile ?? 'driving-car')
     if (!PROFILES.includes(profile)) return res.status(400).json({ error: 'bad_profile' })
 
+    // 2) Reservar de forma atómica: límite por minuto (todos), por día (gratuitos) y tope global diario (gratuitos).
+    let q = 0
+    if (hasRedis) {
+      const cmds: (string | number)[][] = [['INCR', rK], ['EXPIRE', rK, 120]]
+      if (!pro) cmds.push(['INCR', qK], ['EXPIRE', qK, 172800], ['INCR', gK], ['EXPIRE', gK, 172800])
+      const r = await redis(cmds)
+      q = r[2]
+      undo = async () => { if (!pro) await redis([['DECR', qK], ['DECR', gK]]).catch(() => {}) }
+      if (r[0] > RATE_LIMIT) { await undo(); return res.status(429).json({ error: 'rate_limited' }) }
+      if (!pro && q > FREE_LIMIT) { await undo(); res.setHeader('X-Remaining', '0'); return res.status(429).json({ error: 'daily_limit' }) }
+      if (!pro && r[4] > GLOBAL_LIMIT) { await undo(); return res.status(503).json({ error: 'capacity' }) }
+    }
+
+    // 3) Llamar a ORS
     let out: Awaited<ReturnType<typeof callOrs>>
-    try {
-      out = await callOrs(profile, { locations: b.locations, range: b.range, range_type: 'time', attributes: ['area'], smoothing: 0.8 })
-    } catch (e) { console.error('ORS timeout/red', e); return res.status(504).json({ error: 'ors_timeout' }) }
+    try { out = await callOrs(profile, { locations: [[loc[0], loc[1]]], range: b.range, range_type: 'time', attributes: ['area'], smoothing: 0.8 }) }
+    catch (e) { console.error('ORS timeout/red', e); await undo(); return res.status(504).json({ error: 'ors_timeout' }) }
     const { r, text } = out
     if (!r.ok) {
+      await undo()
       console.error('ORS error', r.status, profile, text.slice(0, 500)) // visible en Vercel > Logs
-      if (transient(r.status, text)) return res.status(504).json({ error: 'ors_timeout' }) // ORS saturado o lento
+      if (transient(r.status, text)) return res.status(504).json({ error: 'ors_timeout' })
       if (r.status === 401 || r.status === 403) return res.status(502).json({ error: 'ors_key' })
       if (r.status === 429) return res.status(503).json({ error: 'ors_busy' })
       let detail = text
       try { const j = JSON.parse(text); detail = j?.error?.message ?? j?.error ?? text } catch { /* texto plano */ }
-      if (/^\s*</.test(text)) detail = 'respuesta no válida de ORS' // HTML (p. ej. de un proxy), no se muestra
+      if (/^\s*</.test(String(detail))) detail = 'respuesta no válida de ORS'
       return res.status(422).json({ error: 'ors_error', status: r.status, detail: short(typeof detail === 'string' ? detail : JSON.stringify(detail)) })
     }
 
-    // Solo se consume cuota si el cálculo fue correcto (un fallo al guardarla no pierde el resultado)
-    if (!pro) {
-      try { await clerk.users.updateUserMetadata(userId, { privateMetadata: { usage: { date: today(), count: used + 1 } } }) }
-      catch (e) { console.error('No se pudo guardar la cuota', e) }
-    }
-    res.setHeader('X-Remaining', left(used + 1))
+    res.setHeader('X-Remaining', pro ? 'unlimited' : String(Math.max(0, FREE_LIMIT - q)))
     res.setHeader('Content-Type', 'application/json')
     return res.status(200).send(text)
   } catch (e) {
-    console.error('Fallo en /api/ors', e)
-    return res.status(500).json({ error: 'server', detail: short(e instanceof Error ? e.message : e) })
+    await undo()
+    console.error('Fallo en /api/ors', e) // el detalle solo va a los logs, no al cliente
+    return res.status(500).json({ error: 'server' })
   }
 }

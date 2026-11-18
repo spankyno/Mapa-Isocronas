@@ -32,7 +32,10 @@ export async function fetchIsochrones(
     }),
   })
   if (res.status === 401) throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.')
-  if (res.status === 429) throw new Error('Has alcanzado el límite de 3 mapas diarios. Hazte Pro para uso ilimitado o vuelve mañana.')
+  if (res.status === 429) {
+    const j = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(j?.error === 'rate_limited' ? 'Demasiadas peticiones seguidas. Espera un minuto.' : 'Has alcanzado el límite de 3 mapas diarios. Hazte Pro para uso ilimitado o vuelve mañana.')
+  }
   if (res.status === 502) throw new Error('API key de ORS inválida (configuración del servidor).')
   if (res.status === 503) throw new Error('OpenRouteService está saturado. Espera un momento.')
   if (res.status === 504) throw new Error('OpenRouteService está saturado o inestable ahora mismo (el fallo es de su servicio, no de tu punto). Reinténtalo en unos minutos o prueba con menos tiempos o un máximo menor (p. ej. 30–45 min).')
